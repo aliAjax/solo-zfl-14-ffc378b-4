@@ -60,6 +60,12 @@ async function seedAndOpen(page, overrides) {
   await page.goto("/");
 }
 
+// 外层 beforeEach 已播种并打开页面；需要自定义数据时覆盖后重新加载
+async function reseedAndReload(page, overrides) {
+  await page.evaluate(([key, value]) => localStorage.setItem(key, JSON.stringify(value)), [STORAGE_KEY, seedState(overrides)]);
+  await page.reload();
+}
+
 const locations = (page) => page.locator(".repair h3").allTextContents();
 
 test.beforeEach(async ({ page }) => {
@@ -191,5 +197,63 @@ test.describe("原有功能回归", () => {
     await expect(page.locator(".repair")).toHaveCount(2);
     await page.locator(".repair", { hasText: "客厅" }).locator("[data-delete]").click();
     await expect(page.locator(".repair")).toHaveCount(1);
+  });
+});
+
+test.describe("照片加载失败", () => {
+  const brokenPhoto = {
+    id: "r4",
+    location: "阳台",
+    title: "晾衣架松动",
+    priority: "medium",
+    cost: 120,
+    status: "todo",
+    photo: "/missing-photo.png",
+    note: "周末处理",
+    createdAt: 4000
+  };
+
+  test("显示替代占位文字而非破裂图标", async ({ page }) => {
+    await reseedAndReload(page, { repairs: [...seedRepairs, brokenPhoto] });
+    const photo = page.locator(".repair", { hasText: "阳台" }).locator(".photo");
+    await expect(photo).toHaveText("照片加载失败");
+    await expect(photo.locator("img")).toHaveCount(0);
+  });
+
+  test("有效照片仍正常显示为图片", async ({ page }) => {
+    const validPhoto = {
+      ...brokenPhoto,
+      photo: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+    };
+    await reseedAndReload(page, { repairs: [...seedRepairs, validPhoto] });
+    const img = page.locator(".repair", { hasText: "阳台" }).locator(".photo img");
+    await expect(img).toBeVisible();
+    expect(await img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0);
+  });
+
+  test("不中断搜索、排序、状态流转、删除和统计", async ({ page }) => {
+    await reseedAndReload(page, { repairs: [...seedRepairs, brokenPhoto] });
+    await expect(page.locator(".repair", { hasText: "阳台" }).locator(".photo")).toHaveText("照片加载失败");
+
+    // 统计包含坏照片事项：未完成 3 项，预计费用 260+180+120
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("3");
+    await expect(page.locator(".stat", { hasText: "预计费用" }).locator("strong")).toHaveText("¥560");
+
+    // 搜索仍能找到该事项
+    await page.locator("#search-input").fill("晾衣架");
+    await expect(page.locator(".repair")).toHaveCount(1);
+    await page.locator("#search-input").fill("");
+
+    // 排序正常：创建时间降序，阳台（createdAt 最大）在最前
+    expect(await locations(page)).toEqual(["阳台", "卫生间", "卧室", "厨房"]);
+
+    // 状态流转正常
+    await page.locator("[data-status='r4']").selectOption("done");
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("2");
+
+    // 删除正常
+    await page.locator("[data-delete='r4']").click();
+    await expect(page.locator(".repair")).toHaveCount(3);
+    await expect(page.locator(".stat", { hasText: "预计费用" }).locator("strong")).toHaveText("¥440");
   });
 });

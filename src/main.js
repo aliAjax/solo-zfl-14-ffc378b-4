@@ -224,6 +224,18 @@ function bindEvents() {
       render();
     });
   });
+
+  // 图片 error 事件不冒泡，用捕获阶段监听；加载失败时替换为占位文字
+  document.querySelector(".repairs").addEventListener(
+    "error",
+    (event) => {
+      if (event.target instanceof HTMLImageElement) {
+        const photo = event.target.closest(".photo");
+        if (photo) photo.textContent = "照片加载失败";
+      }
+    },
+    true
+  );
 }
 
 function visibleRepairs() {
