@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
 
 const STORAGE_KEY = "zfl-14-repairs";
 
@@ -319,5 +320,59 @@ test.describe("清空已完成", () => {
     await page.locator("textarea[name='title']").fill("插座面板开裂");
     await page.locator("button[type='submit']").click();
     await expect(page.locator(".repair")).toHaveCount(3);
+  });
+});
+
+test.describe("导出", () => {
+  function expectedStamp() {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+
+  test("导出文件名带日期，内容为当前全部维修事项", async ({ page }) => {
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#export-json").click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe(`维修事项-${expectedStamp()}.json`);
+
+    const content = JSON.parse(fs.readFileSync(await download.path(), "utf-8"));
+    expect(content).toEqual(seedRepairs);
+  });
+
+  test("导出不改变本地存储和页面状态", async ({ page }) => {
+    const before = await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#export-json").click();
+    const download = await downloadPromise;
+    await download.path();
+
+    const after = await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY);
+    expect(after).toBe(before);
+    await expect(page.locator(".repair")).toHaveCount(3);
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("2");
+  });
+
+  test("导出后搜索、排序、新增、状态流转保持可用", async ({ page }) => {
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#export-json").click();
+    await (await downloadPromise).path();
+
+    await page.locator("#search-input").fill("水槽");
+    await expect(page.locator(".repair")).toHaveCount(1);
+    await page.locator("#search-input").fill("");
+
+    await page.locator("#sort-by").selectOption("cost");
+    expect(await locations(page)).toEqual(["厨房", "卫生间", "卧室"]);
+
+    await page.locator("input[name='location']").fill("客厅");
+    await page.locator("textarea[name='title']").fill("插座面板开裂");
+    await page.locator("button[type='submit']").click();
+    await expect(page.locator(".repair")).toHaveCount(4);
+
+    await page.locator("[data-status='r1']").selectOption("done");
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("2");
   });
 });

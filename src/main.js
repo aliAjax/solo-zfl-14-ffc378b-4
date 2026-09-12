@@ -100,6 +100,7 @@ function render() {
         <section>
           <div class="toolbar">
             ${Object.entries(statuses).map(([value, label]) => `<button class="seg ${state.filter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("")}
+            <button class="ghost export" id="export-json" type="button">导出 JSON</button>
             <button class="ghost clear-done" id="clear-done" type="button" ${done ? "" : "disabled"}>清空已完成${done ? `（${done}）` : ""}</button>
           </div>
           <div class="controls">
@@ -214,6 +215,20 @@ function bindEvents() {
     state.repairs = state.repairs.filter((repair) => repair.status !== "done");
     saveState();
     render();
+  });
+
+  // 仅读取当前数据生成下载，不修改 state 和 localStorage
+  document.querySelector("#export-json").addEventListener("click", () => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const blob = new Blob([JSON.stringify(state.repairs, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `维修事项-${stamp}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   });
 
   document.querySelectorAll("[data-status]").forEach((select) => {
