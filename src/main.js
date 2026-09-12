@@ -14,14 +14,33 @@ const priorities = {
   low: "低优先级"
 };
 
+const priorityRank = {
+  high: 3,
+  medium: 2,
+  low: 1
+};
+
+const sortFields = {
+  created: "创建时间",
+  priority: "优先级",
+  cost: "预计费用"
+};
+
+const defaultView = {
+  filter: "all",
+  search: "",
+  sortBy: "created",
+  sortDir: "desc"
+};
+
 let state = loadState();
 const app = document.querySelector("#app");
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) return JSON.parse(saved);
+  if (saved) return { ...defaultView, ...JSON.parse(saved) };
   return {
-    filter: "all",
+    ...defaultView,
     repairs: [
       {
         id: crypto.randomUUID(),
@@ -31,7 +50,8 @@ function loadState() {
         cost: 260,
         status: "todo",
         photo: "",
-        note: "先检查软管接口"
+        note: "先检查软管接口",
+        createdAt: Date.now()
       }
     ]
   };
@@ -42,7 +62,7 @@ function saveState() {
 }
 
 function render() {
-  const repairs = filteredRepairs();
+  const repairs = visibleRepairs();
   const unfinished = state.repairs.filter((repair) => repair.status !== "done");
   const totalCost = unfinished.reduce((total, repair) => total + Number(repair.cost || 0), 0);
   const doing = state.repairs.filter((repair) => repair.status === "doing").length;
@@ -80,8 +100,18 @@ function render() {
           <div class="toolbar">
             ${Object.entries(statuses).map(([value, label]) => `<button class="seg ${state.filter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("")}
           </div>
+          <div class="controls">
+            <input id="search-input" type="search" placeholder="搜索位置、问题描述或备注" value="${escapeHtml(state.search)}" aria-label="搜索维修事项">
+            <div class="sort">
+              <label for="sort-by">排序</label>
+              <select id="sort-by">
+                ${Object.entries(sortFields).map(([value, label]) => `<option value="${value}" ${state.sortBy === value ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+              <button class="ghost" id="sort-dir" type="button" aria-label="切换排序方向">${state.sortDir === "asc" ? "↑ 升序" : "↓ 降序"}</button>
+            </div>
+          </div>
           <div class="repairs">
-            ${repairs.length ? repairs.map(renderRepair).join("") : `<div class="empty">当前状态下没有维修事项</div>`}
+            ${repairs.length ? repairs.map(renderRepair).join("") : `<div class="empty">没有匹配的维修事项</div>`}
           </div>
         </section>
       </section>
@@ -140,7 +170,8 @@ function bindEvents() {
       cost: Number(data.cost || 0),
       status: data.status,
       photo: data.photo.trim(),
-      note: data.note.trim()
+      note: data.note.trim(),
+      createdAt: Date.now()
     });
     saveState();
     render();
@@ -152,6 +183,29 @@ function bindEvents() {
       saveState();
       render();
     });
+  });
+
+  const searchInput = document.querySelector("#search-input");
+  searchInput.addEventListener("input", () => {
+    state.search = searchInput.value;
+    saveState();
+    render();
+    // render 会重建输入框，恢复焦点和光标位置避免打断输入
+    const restored = document.querySelector("#search-input");
+    restored.focus();
+    restored.setSelectionRange(restored.value.length, restored.value.length);
+  });
+
+  document.querySelector("#sort-by").addEventListener("change", (event) => {
+    state.sortBy = event.target.value;
+    saveState();
+    render();
+  });
+
+  document.querySelector("#sort-dir").addEventListener("click", () => {
+    state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    saveState();
+    render();
   });
 
   document.querySelectorAll("[data-status]").forEach((select) => {
@@ -172,9 +226,21 @@ function bindEvents() {
   });
 }
 
-function filteredRepairs() {
-  if (state.filter === "all") return state.repairs;
-  return state.repairs.filter((repair) => repair.status === state.filter);
+function visibleRepairs() {
+  const keyword = state.search.trim().toLowerCase();
+  let list = state.filter === "all" ? [...state.repairs] : state.repairs.filter((repair) => repair.status === state.filter);
+  if (keyword) {
+    list = list.filter((repair) =>
+      [repair.location, repair.title, repair.note].some((field) => String(field || "").toLowerCase().includes(keyword))
+    );
+  }
+  const direction = state.sortDir === "asc" ? 1 : -1;
+  const sortValue = (repair) => {
+    if (state.sortBy === "priority") return priorityRank[repair.priority] || 0;
+    if (state.sortBy === "cost") return Number(repair.cost || 0);
+    return Number(repair.createdAt || 0);
+  };
+  return list.sort((a, b) => (sortValue(a) - sortValue(b)) * direction);
 }
 
 function escapeHtml(value) {

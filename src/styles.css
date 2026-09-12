@@ -151,6 +151,41 @@ textarea {
   margin-bottom: 14px;
 }
 
+.controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.controls #search-input {
+  flex: 1 1 220px;
+  width: auto;
+}
+
+.sort {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.sort label {
+  color: #5c655b;
+  display: block;
+  font-size: 0.86rem;
+}
+
+.sort select {
+  min-height: 38px;
+  width: auto;
+}
+
+.sort .ghost {
+  white-space: nowrap;
+}
+
 .seg {
   background: #e9eee6;
   border-radius: 999px;
