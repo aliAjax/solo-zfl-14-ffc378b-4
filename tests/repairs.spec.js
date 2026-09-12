@@ -376,3 +376,46 @@ test.describe("导出", () => {
     await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("2");
   });
 });
+
+test.describe("已完成支出统计", () => {
+  const spentStat = (page) => page.locator(".stat", { hasText: "已完成支出" }).locator("strong");
+  const costStat = (page) => page.locator(".stat", { hasText: "预计费用" }).locator("strong");
+
+  test("初始分别统计已完成支出和未完成预计费用", async ({ page }) => {
+    // 种子数据：已完成 60，未完成 260+180
+    await expect(spentStat(page)).toHaveText("¥60");
+    await expect(costStat(page)).toHaveText("¥440");
+  });
+
+  test("状态切到已完成计入支出，刷新后两类金额一致", async ({ page }) => {
+    await page.locator("[data-status='r1']").selectOption("done");
+    await expect(spentStat(page)).toHaveText("¥320");
+    await expect(costStat(page)).toHaveText("¥180");
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("1");
+
+    await page.reload();
+    await expect(spentStat(page)).toHaveText("¥320");
+    await expect(costStat(page)).toHaveText("¥180");
+  });
+
+  test("新增已完成事项直接计入支出", async ({ page }) => {
+    await page.locator("input[name='location']").fill("客厅");
+    await page.locator("textarea[name='title']").fill("更换吸顶灯");
+    await page.locator("input[name='cost']").fill("90");
+    await page.locator("select[name='status']").selectOption("done");
+    await page.locator("button[type='submit']").click();
+
+    await expect(spentStat(page)).toHaveText("¥150");
+    await expect(costStat(page)).toHaveText("¥440");
+  });
+
+  test("清空已完成后支出归零，预计费用不变", async ({ page }) => {
+    await page.locator("#clear-done").click();
+    await expect(spentStat(page)).toHaveText("¥0");
+    await expect(costStat(page)).toHaveText("¥440");
+
+    await page.reload();
+    await expect(spentStat(page)).toHaveText("¥0");
+    await expect(costStat(page)).toHaveText("¥440");
+  });
+});

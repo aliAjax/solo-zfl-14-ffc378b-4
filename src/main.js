@@ -67,6 +67,9 @@ function render() {
   const totalCost = unfinished.reduce((total, repair) => total + Number(repair.cost || 0), 0);
   const doing = state.repairs.filter((repair) => repair.status === "doing").length;
   const done = state.repairs.filter((repair) => repair.status === "done").length;
+  const doneCost = state.repairs
+    .filter((repair) => repair.status === "done")
+    .reduce((total, repair) => total + Number(repair.cost || 0), 0);
 
   app.innerHTML = `
     <main class="shell">
@@ -79,6 +82,7 @@ function render() {
           <div class="stat"><span>未完成</span><strong>${unfinished.length}</strong></div>
           <div class="stat"><span>处理中</span><strong>${doing}</strong></div>
           <div class="stat"><span>预计费用</span><strong>¥${totalCost}</strong></div>
+          <div class="stat"><span>已完成支出</span><strong>¥${doneCost}</strong></div>
         </section>
       </header>
 
