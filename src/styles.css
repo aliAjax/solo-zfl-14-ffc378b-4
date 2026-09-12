@@ -199,6 +199,15 @@ textarea {
   color: white;
 }
 
+.clear-done {
+  margin-left: auto;
+}
+
+.ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .repairs {
   display: grid;
   gap: 12px;

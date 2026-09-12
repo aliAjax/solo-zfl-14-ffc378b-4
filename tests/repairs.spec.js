@@ -257,3 +257,67 @@ test.describe("照片加载失败", () => {
     await expect(page.locator(".stat", { hasText: "预计费用" }).locator("strong")).toHaveText("¥440");
   });
 });
+
+test.describe("清空已完成", () => {
+  test("只移除已完成事项，未完成保留，统计同步", async ({ page }) => {
+    await expect(page.locator("#clear-done")).toHaveText("清空已完成（1）");
+    await page.locator("#clear-done").click();
+
+    // 已完成（卧室）被移除，待处理和处理中保留
+    await expect(page.locator(".repair")).toHaveCount(2);
+    expect(await locations(page)).toEqual(["卫生间", "厨房"]);
+    await expect(page.locator(".repair h3", { hasText: "卧室" })).toHaveCount(0);
+
+    // 统计同步：未完成 2、处理中 1、预计费用 260+180
+    await expect(page.locator(".stat", { hasText: "未完成" }).locator("strong")).toHaveText("2");
+    await expect(page.locator(".stat", { hasText: "处理中" }).locator("strong")).toHaveText("1");
+    await expect(page.locator(".stat", { hasText: "预计费用" }).locator("strong")).toHaveText("¥440");
+
+    // 没有已完成事项后按钮禁用
+    await expect(page.locator("#clear-done")).toBeDisabled();
+  });
+
+  test("刷新后清空结果一致", async ({ page }) => {
+    await page.locator("#clear-done").click();
+    await expect(page.locator(".repair")).toHaveCount(2);
+
+    await page.reload();
+    await expect(page.locator(".repair")).toHaveCount(2);
+    await expect(page.locator(".repair h3", { hasText: "卧室" })).toHaveCount(0);
+    await expect(page.locator("#clear-done")).toBeDisabled();
+
+    const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STORAGE_KEY);
+    expect(saved.repairs).toHaveLength(2);
+    expect(saved.repairs.every((repair) => repair.status !== "done")).toBe(true);
+  });
+
+  test("状态流转出已完成项后按钮恢复可用并可再次清空", async ({ page }) => {
+    await page.locator("#clear-done").click();
+    await expect(page.locator("#clear-done")).toBeDisabled();
+
+    await page.locator("[data-status='r1']").selectOption("done");
+    await expect(page.locator("#clear-done")).toBeEnabled();
+    await expect(page.locator("#clear-done")).toHaveText("清空已完成（1）");
+
+    await page.locator("#clear-done").click();
+    await expect(page.locator(".repair")).toHaveCount(1);
+    expect(await locations(page)).toEqual(["卫生间"]);
+  });
+
+  test("清空后搜索、排序、新增保持可用", async ({ page }) => {
+    await page.locator("#clear-done").click();
+
+    await page.locator("#search-input").fill("马桶");
+    await expect(page.locator(".repair")).toHaveCount(1);
+    await page.locator("#search-input").fill("");
+
+    await page.locator("#sort-by").selectOption("cost");
+    await page.locator("#sort-dir").click();
+    expect(await locations(page)).toEqual(["卫生间", "厨房"]);
+
+    await page.locator("input[name='location']").fill("客厅");
+    await page.locator("textarea[name='title']").fill("插座面板开裂");
+    await page.locator("button[type='submit']").click();
+    await expect(page.locator(".repair")).toHaveCount(3);
+  });
+});

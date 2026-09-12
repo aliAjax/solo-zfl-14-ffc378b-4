@@ -66,6 +66,7 @@ function render() {
   const unfinished = state.repairs.filter((repair) => repair.status !== "done");
   const totalCost = unfinished.reduce((total, repair) => total + Number(repair.cost || 0), 0);
   const doing = state.repairs.filter((repair) => repair.status === "doing").length;
+  const done = state.repairs.filter((repair) => repair.status === "done").length;
 
   app.innerHTML = `
     <main class="shell">
@@ -99,6 +100,7 @@ function render() {
         <section>
           <div class="toolbar">
             ${Object.entries(statuses).map(([value, label]) => `<button class="seg ${state.filter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("")}
+            <button class="ghost clear-done" id="clear-done" type="button" ${done ? "" : "disabled"}>清空已完成${done ? `（${done}）` : ""}</button>
           </div>
           <div class="controls">
             <input id="search-input" type="search" placeholder="搜索位置、问题描述或备注" value="${escapeHtml(state.search)}" aria-label="搜索维修事项">
@@ -204,6 +206,12 @@ function bindEvents() {
 
   document.querySelector("#sort-dir").addEventListener("click", () => {
     state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    saveState();
+    render();
+  });
+
+  document.querySelector("#clear-done").addEventListener("click", () => {
+    state.repairs = state.repairs.filter((repair) => repair.status !== "done");
     saveState();
     render();
   });
